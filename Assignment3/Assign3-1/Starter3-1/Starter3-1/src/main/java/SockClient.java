@@ -74,7 +74,60 @@ class SockClient {
             json.put("type", "addmany");
             json.put("nums", array);
             break;
-            // TODO: add the other cases
+          case 4:
+            System.out.println("Choose charCount. Do you want to search for a specific character? (yes/no)");
+            String findCharChoice = scanner.nextLine().toLowerCase();
+            json.put("type", "charCount");
+
+            if (findCharChoice.equals("yes")) {
+            json.put("findchar", true);
+            System.out.println("Enter the character to search for:");
+            String find = scanner.nextLine();
+            json.put("find", find);
+
+            } else {
+            json.put("findchar", false);
+            }
+
+            System.out.println("Enter the string to analyze:");
+            String countText = scanner.nextLine();
+            json.put("count", countText);
+            break;
+          case 5:
+            System.out.println("Choose inventory, what would you like to do?");
+            System.out.println("1 - Add item, 2 - View inventory, 3 - Buy item");
+            int inventoryChoice = Integer.parseInt(scanner.nextLine());
+            json.put("type", "inventory");
+    
+            switch (inventoryChoice) {
+              case 1:
+                json.put("task", "add");
+                System.out.println("Enter product name:");
+                String productName = scanner.nextLine();
+                json.put("productName", productName);
+
+                System.out.println("Enter quantity:");
+                int quantity = Integer.parseInt(scanner.nextLine());
+                json.put("quantity", quantity);
+                break;
+              case 2:
+                json.put("task", "view");
+                break;
+              case 3:
+                json.put("task", "buy");
+                System.out.println("Enter product name:");
+                productName = scanner.nextLine();
+                json.put("productName", productName);
+
+                System.out.println("Enter quantity to buy:");
+                quantity = Integer.parseInt(scanner.nextLine());
+                json.put("quantity", quantity);
+                break;
+              default:
+                System.out.println("Invalid option for inventory. Please try again.");
+                continue;
+          }
+          break;
         }
         if(!requesting) {
           continue;
@@ -90,16 +143,29 @@ class SockClient {
         // !! you will most likely need to parse the response for the other 2 services!
         String i = (String) in.readUTF();
         JSONObject res = new JSONObject(i);
+
         System.out.println("Got response: " + res);
-        if (res.getBoolean("ok")){
-          if (res.getString("type").equals("echo")) {
-            System.out.println(res.getString("echo"));
-          } else {
-            System.out.println(res.getInt("result"));
-          }
+        if (res.getBoolean("ok")) {
+            String responseType = res.getString("type");
+
+            if (responseType.equals("echo")) {
+                System.out.println(res.getString("echo"));
+            } else if (responseType.equals("add") || responseType.equals("addmany") || responseType.equals("charCount")) {
+                // Only these types of responses include a "result" field
+                System.out.println("Result: " + res.getInt("result"));
+            } else if (responseType.equals("inventory")) {
+                // Handle the inventory response with an "inventory" array
+                System.out.println("Inventory:");
+                JSONArray inventoryArray = res.getJSONArray("inventory");
+                for (int j = 0; j < inventoryArray.length(); j++) {
+                    JSONObject item = inventoryArray.getJSONObject(j);
+                    System.out.println("Product: " + item.getString("product") + ", Quantity: " + item.getInt("quantity"));
+                }
+            }
         } else {
-          System.out.println(res.getString("message"));
+            System.out.println("Error: " + res.getString("message"));
         }
+
       }
       // want to keep requesting services so don't close connection
       //overandout();

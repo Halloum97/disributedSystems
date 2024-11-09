@@ -235,4 +235,172 @@ public class ServerTest {
         // calling the other test to make sure server continues to work and the "continue" does what it is supposed to do
         addRequest();
     }
+
+    @Test
+    public void inventoryRequest() throws IOException {
+        // 1. Valid request to add an item to the inventory
+        JSONObject req1 = new JSONObject();
+        req1.put("type", "inventory");
+        req1.put("task", "add");
+        req1.put("productName", "Laptop");
+        req1.put("quantity", 10);
+
+        os.writeObject(req1.toString());
+        os.flush();
+
+        String i = (String) in.readUTF();
+        JSONObject res = new JSONObject(i);
+
+        assertTrue(res.getBoolean("ok"));
+        assertEquals("inventory", res.getString("type"));
+        assertNotNull(res.getJSONArray("inventory"));
+
+        // 2. Valid request to view the inventory
+        JSONObject req2 = new JSONObject();
+        req2.put("type", "inventory");
+        req2.put("task", "view");
+
+        os.writeObject(req2.toString());
+        os.flush();
+
+        i = (String) in.readUTF();
+        res = new JSONObject(i);
+
+        assertTrue(res.getBoolean("ok"));
+        assertEquals("inventory", res.getString("type"));
+        assertNotNull(res.getJSONArray("inventory"));
+
+        // 3. Valid request to buy from the inventory
+        JSONObject req3 = new JSONObject();
+        req3.put("type", "inventory");
+        req3.put("task", "buy");
+        req3.put("productName", "Laptop");
+        req3.put("quantity", 5);
+
+        os.writeObject(req3.toString());
+        os.flush();
+
+        i = (String) in.readUTF();
+        res = new JSONObject(i);
+
+        assertTrue(res.getBoolean("ok"));
+        assertEquals("inventory", res.getString("type"));
+        assertNotNull(res.getJSONArray("inventory"));
+
+        // 4. Invalid request - buying more than available quantity
+        JSONObject req4 = new JSONObject();
+        req4.put("type", "inventory");
+        req4.put("task", "buy");
+        req4.put("productName", "Laptop");
+        req4.put("quantity", 100); // Exceeds available quantity
+
+        os.writeObject(req4.toString());
+        os.flush();
+
+        i = (String) in.readUTF();
+        res = new JSONObject(i);
+
+        assertFalse(res.getBoolean("ok"));
+        assertEquals("Product Laptop not available in quantity 100", res.getString("message"));
+
+        // 5. Invalid request - missing fields (quantity missing for add task)
+        JSONObject req5 = new JSONObject();
+        req5.put("type", "inventory");
+        req5.put("task", "add");
+        req5.put("productName", "Phone");
+
+        os.writeObject(req5.toString());
+        os.flush();
+
+        i = (String) in.readUTF();
+        res = new JSONObject(i);
+
+        assertFalse(res.getBoolean("ok"));
+        assertEquals("Field quantity does not exist in request", res.getString("message"));
+    }
+
+    @Test
+public void charCountRequest() throws IOException {
+    // 1. Valid request for general character count
+    JSONObject req1 = new JSONObject();
+    req1.put("type", "charCount");
+    req1.put("findchar", false);
+    req1.put("count", "Hello World");
+
+    os.writeObject(req1.toString());
+    os.flush();
+
+    String i = (String) in.readUTF();
+    JSONObject res = new JSONObject(i);
+
+    assertTrue(res.getBoolean("ok"));
+    assertEquals("charcount", res.getString("type"));
+    assertEquals(11, res.getInt("result"));
+
+    // 2. Valid request for specific character count
+    JSONObject req2 = new JSONObject();
+    req2.put("type", "charCount");
+    req2.put("findchar", true);
+    req2.put("find", "o");
+    req2.put("count", "Hello World");
+
+    os.writeObject(req2.toString());
+    os.flush();
+
+    i = (String) in.readUTF();
+    res = new JSONObject(i);
+
+    assertTrue(res.getBoolean("ok"));
+    assertEquals("charcount", res.getString("type"));
+    assertEquals(2, res.getInt("result")); // "o" appears twice in "Hello World"
+
+    // 3. Invalid request - missing 'count' field
+    JSONObject req3 = new JSONObject();
+    req3.put("type", "charCount");
+    req3.put("findchar", true);
+    req3.put("find", "o");
+
+    os.writeObject(req3.toString());
+    os.flush();
+
+    i = (String) in.readUTF();
+    res = new JSONObject(i);
+
+    assertFalse(res.getBoolean("ok"));
+    assertEquals("Field count does not exist in request", res.getString("message"));
+
+    // 4. Invalid request - 'find' missing for specific character count
+    JSONObject req4 = new JSONObject();
+    req4.put("type", "charCount");
+    req4.put("findchar", true);
+    req4.put("count", "Hello World");
+
+    os.writeObject(req4.toString());
+    os.flush();
+
+    i = (String) in.readUTF();
+    res = new JSONObject(i);
+
+    assertFalse(res.getBoolean("ok"));
+    assertEquals("Field find does not exist in request", res.getString("message"));
+
+    // 5. Invalid request - 'find' is not a single character
+    JSONObject req5 = new JSONObject();
+    req5.put("type", "charCount");
+    req5.put("findchar", true);
+    req5.put("find", "lo");
+    req5.put("count", "Hello World");
+
+    os.writeObject(req5.toString());
+    os.flush();
+
+    i = (String) in.readUTF();
+    res = new JSONObject(i);
+
+    assertFalse(res.getBoolean("ok"));
+    assertEquals("Field find needs to be a single character", res.getString("message"));
+}
+
+
+
 }

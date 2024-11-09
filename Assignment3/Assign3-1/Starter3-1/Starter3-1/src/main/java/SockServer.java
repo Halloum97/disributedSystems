@@ -3,6 +3,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.net.*;
+import java.util.HashMap;
+import java.util.Map;
 import java.io.*;
 
 /**
@@ -88,7 +90,12 @@ public class SockServer {
             res = add(req);
           } else if (req.getString("type").equals("addmany")) {
             res = addmany(req);
-          } else {
+          } else if (req.getString("type").equals("inventory")){
+            res = inventory(req);
+          } else if (req.getString("type").equals("charCount")){
+            res = charCount(req);
+          }
+           else {
             res = wrongType(req);
           }
           writeOut(res);
@@ -161,15 +168,163 @@ public class SockServer {
     return res;
   }
 
-  // implement me in assignment 3
+    // Global inventory store
+  private static Map<String, Integer> inventory = new HashMap<>();
+
   static JSONObject inventory(JSONObject req) {
-    return new JSONObject();
+      JSONObject res = new JSONObject();
+
+      // Check if task field exists and is a String
+      JSONObject taskCheck = testField(req, "task");
+      if (!taskCheck.getBoolean("ok")) {
+          return taskCheck;
+      }
+
+      String task = req.getString("task");
+      
+      switch (task) {
+          case "add":
+              // Check if productName and quantity fields exist
+              JSONObject productNameCheck = testField(req, "productName");
+              if (!productNameCheck.getBoolean("ok")) {
+                  return productNameCheck;
+              }
+              JSONObject quantityCheck = testField(req, "quantity");
+              if (!quantityCheck.getBoolean("ok")) {
+                  return quantityCheck;
+              }
+
+              // Add or update the product quantity in inventory
+              String productName = req.getString("productName");
+              int quantity = req.getInt("quantity");
+              inventory.put(productName, inventory.getOrDefault(productName, 0) + quantity);
+
+              res.put("type", "inventory");
+              res.put("ok", true);
+              res.put("inventory", getInventoryList());
+              break;
+
+          case "view":
+              // Return the full inventory list
+              res.put("type", "inventory");
+              res.put("ok", true);
+              res.put("inventory", getInventoryList());
+              break;
+
+          case "buy":
+              // Check if productName and quantity fields exist
+              productNameCheck = testField(req, "productName");
+              if (!productNameCheck.getBoolean("ok")) {
+                  return productNameCheck;
+              }
+              quantityCheck = testField(req, "quantity");
+              if (!quantityCheck.getBoolean("ok")) {
+                  return quantityCheck;
+              }
+
+              productName = req.getString("productName");
+              quantity = req.getInt("quantity");
+
+              // Check if product is in inventory and if enough quantity is available
+              if (!inventory.containsKey(productName)) {
+                  res.put("type", "inventory");
+                  res.put("ok", false);
+                  res.put("message", "Product " + productName + " not in inventory");
+              } else if (inventory.get(productName) < quantity) {
+                  res.put("type", "inventory");
+                  res.put("ok", false);
+                  res.put("message", "Product " + productName + " not available in quantity " + quantity);
+              } else {
+                  // Deduct quantity and respond with updated inventory
+                  inventory.put(productName, inventory.get(productName) - quantity);
+                  res.put("type", "inventory");
+                  res.put("ok", true);
+                  res.put("inventory", getInventoryList());
+              }
+              break;
+
+          default:
+              res.put("ok", false);
+              res.put("message", "Invalid task for inventory");
+      }
+      
+
+      return res;
   }
 
-  // implement me in assignment 3
-  static JSONObject charCount(JSONObject req) {
-    return new JSONObject();
+  // Helper function to format the inventory as a JSONArray
+  private static JSONArray getInventoryList() {
+      JSONArray inventoryArray = new JSONArray();
+      for (Map.Entry<String, Integer> entry : inventory.entrySet()) {
+          JSONObject item = new JSONObject();
+          item.put("product", entry.getKey());
+          item.put("quantity", entry.getValue());
+          inventoryArray.put(item);
+      }
+      return inventoryArray;
   }
+
+
+  static JSONObject charCount(JSONObject req) {
+    JSONObject res = new JSONObject();
+
+    // Check if "count" field exists and is a String
+    JSONObject countFieldCheck = testField(req, "count");
+    if (!countFieldCheck.getBoolean("ok")) {
+        return countFieldCheck;
+    }
+
+    // Check if "findchar" field exists and is a boolean
+    JSONObject findCharFieldCheck = testField(req, "findchar");
+    if (!findCharFieldCheck.getBoolean("ok")) {
+        return findCharFieldCheck;
+    }
+    if (!req.get("findchar").getClass().getName().equals("java.lang.Boolean")) {
+        res.put("ok", false);
+        res.put("message", "Field findchar needs to be of type: boolean");
+        return res;
+    }
+
+    // Retrieve the string to analyze and the findchar flag
+    String text = req.getString("count");
+    boolean findChar = req.getBoolean("findchar");
+
+    // Case 1: General character count
+    if (!findChar) {
+        res.put("type", "charCount");
+        res.put("ok", true);
+        res.put("result", text.length());  // Count total characters
+    } 
+    // Case 2: Specific character count
+    else {
+        // Check if "find" field exists and is a one-letter string
+        JSONObject findFieldCheck = testField(req, "find");
+        if (!findFieldCheck.getBoolean("ok")) {
+            return findFieldCheck;
+        }
+        if (req.getString("find").length() != 1) {
+            res.put("ok", false);
+            res.put("message", "Field find needs to be a single character");
+            return res;
+        }
+
+        // Get the character to search for and count its occurrences
+        char targetChar = req.getString("find").charAt(0);
+        int count = 0;
+        for (char c : text.toCharArray()) {
+            if (c == targetChar) {
+                count++;
+            }
+        }
+
+        res.put("type", "charCount");
+        res.put("ok", true);
+        res.put("result", count);  // Count of the specified character
+    }
+
+    return res;
+  }
+
 
   // handles the simple addmany request
   static JSONObject addmany(JSONObject req){
