@@ -34,7 +34,8 @@ public class SockServer {
 
     try {
       //open socket
-      ServerSocket serv = new ServerSocket(port);
+      ServerSocket serv = new ServerSocket(port, 0, InetAddress.getByName("0.0.0.0"));
+
       System.out.println("Server ready for connections");
 
       /**

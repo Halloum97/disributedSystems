@@ -8,7 +8,7 @@ import java.util.Scanner;
  */
 class SockClient {
   static Socket sock = null;
-  static String host = "localhost";
+  static String host = "52.55.154.73";
   static int port = 8888;
   static OutputStream out;
   // Using and Object Stream here and a Data Stream as return. Could both be the same type I just wanted
