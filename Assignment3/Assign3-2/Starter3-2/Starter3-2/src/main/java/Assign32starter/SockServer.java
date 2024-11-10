@@ -1,82 +1,189 @@
 package Assign32starter;
+
 import java.net.*;
 import java.util.Base64;
-import java.util.Set;
 import java.util.Stack;
-import java.util.*;
-
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import javax.imageio.ImageIO;
-import javax.swing.ImageIcon;
-
 import java.awt.image.BufferedImage;
 import java.io.*;
 import org.json.*;
 
-
-/**
- * A class to demonstrate a simple client-server connection using sockets.
- * Ser321 Foundations of Distributed Software Systems
- */
 public class SockServer {
-	static Stack<String> imageSource = new Stack<String>();
+    static Stack<String> imageSource = new Stack<>();
+    private static Map<String, Integer> leaderboard = new HashMap<>();
+    private static final int MAX_HINTS = 4; // number of hints per Wonder
+    private static int roundsLeft = 0;
+    private static int currentRound = 1;
+    private static final String[] images = {
+        "img/Colosseum1.png", "img/GrandCanyon1.png", "img/Stonehenge1.png",
+        "img/Colosseum2.png", "img/GrandCanyon2.png", "img/Stonehenge2.png"
+    };
 
-	public static void main (String args[]) {
-		Socket sock;
-		try {
-			
-			//opening the socket here, just hard coded since this is just a bas example
-			ServerSocket serv = new ServerSocket(8888); // TODO, should not be hardcoded
-			System.out.println("Server ready for connetion");
+    public static void main(String[] args) {
+        try (ServerSocket serv = new ServerSocket(8888)) {
+            System.out.println("Server ready for connection");
 
-			// placeholder for the person who wants to play a game
-			String name = "";
-			int points = 0;
+            while (true) {
+                try (Socket sock = serv.accept()) {
+                    ObjectInputStream in = new ObjectInputStream(sock.getInputStream());
+                    PrintWriter out = new PrintWriter(sock.getOutputStream(), true);
 
-			// read in one object, the message. we know a string was written only by knowing what the client sent. 
-			// must cast the object from Object to desired type to be useful
-			while(true) {
-				sock = serv.accept(); // blocking wait
+                    String input;
+                    JSONObject response;
+                    String name = "";
+                    int points = 0;
 
-				// could totally use other input outpur streams here
-				ObjectInputStream in = new ObjectInputStream(sock.getInputStream());
-				OutputStream out = sock.getOutputStream();
+                    while ((input = (String) in.readObject()) != null) {
+                        JSONObject request = new JSONObject(input);
+                        response = new JSONObject();
 
-				String s = (String) in.readObject();
-				JSONObject json = new JSONObject(s); // the requests that is received
+                        String type = request.optString("type", "unknown");
 
-				JSONObject response = new JSONObject();
+                        switch (type) {
+                            case "hello":
+                                response.put("type", "greeting");
+                                response.put("message", "Hello! Please enter your name and age.");
+                                sendResponse(out, response);
+                                break;
 
-				if (json.getString("type").equals("start")){
-					
-					System.out.println("- Got a start");
-				
-					response.put("type","hello" );
-					response.put("value","Hello, please tell me your name." );
-					sendImg("img/hi.png", response); // calling a method that will manipulate the image and will make it send ready
-					
-				}
-				else {
-					System.out.println("not sure what you meant");
-					response.put("type","error" );
-					response.put("message","unknown response" );
-				}
-				PrintWriter outWrite = new PrintWriter(sock.getOutputStream(), true); // using a PrintWriter here, you could also use and ObjectOutputStream or anything you fancy
-				outWrite.println(response.toString());
-			}
-			
-		} catch(Exception e) {e.printStackTrace();}
-	}
+                            case "name":
+                                name = request.getString("name");
+                                int age = request.optInt("age", -1);
+                                if (age != -1) {
+                                    response.put("type", "welcome");
+                                    response.put("message", "Welcome, " + name + "! You are now ready to play.");
+                                } else {
+                                    response.put("type", "error");
+                                    response.put("message", "Invalid age format.");
+                                }
+                                sendResponse(out, response);
+                                break;
 
-	/* TODO this is for you to implement, I just put a place holder here */
-	public static JSONObject sendImg(String filename, JSONObject obj) throws Exception {
-		File file = new File(filename);
+                            case "rounds":
+                                roundsLeft = request.getInt("rounds");
+                                response.put("type", "start_game");
+                                response.put("message", "Game started with " + roundsLeft + " rounds.");
+                                sendImageForRound(out, currentRound);
+                                sendResponse(out, response);
+                                break;
 
-		if (file.exists()) {
-			// import image
-			// I did not use the Advanced Custom protocol
-			// I read in the image and translated it into basically into a string and send it back to the client where I then decoded again
-			obj.put("image", "Pretend I am this image: " + filename);
-		} 
-		return obj;
-	}
+                            case "guess":
+                                String guess = request.getString("guess");
+                                boolean isCorrect = guess.equalsIgnoreCase("correctAnswer"); // Placeholder answer
+                                if (isCorrect) {
+                                    points += 10;
+                                    currentRound++;
+                                    roundsLeft--;
+                                    response.put("type", "correct_guess");
+                                    response.put("message", "Correct! Starting next round.");
+                                    if (roundsLeft > 0) {
+                                        sendImageForRound(out, currentRound);
+                                    } else {
+                                        response.put("type", "game_over");
+                                        response.put("message", "Game over! Your score: " + points);
+                                    }
+                                } else {
+                                    response.put("type", "incorrect_guess");
+                                    response.put("message", "Incorrect guess. Try again.");
+                                }
+                                sendResponse(out, response);
+                                break;
+
+                            case "skip":
+                                response.put("type", "skip_round");
+                                response.put("message", "Skipping to the next Wonder.");
+                                currentRound++;
+                                roundsLeft--;
+                                if (roundsLeft > 0) {
+                                    sendImageForRound(out, currentRound);
+                                } else {
+                                    response.put("type", "game_over");
+                                    response.put("message", "Game over! Your score: " + points);
+                                }
+                                sendResponse(out, response);
+                                break;
+
+                            case "next":
+                                response.put("type", "next_hint");
+                                response.put("message", "Here's another hint.");
+                                sendImageForRound(out, currentRound); // Send next hint for current image
+                                sendResponse(out, response);
+                                break;
+
+                            case "remaining":
+                                response.put("type", "remaining_hints");
+                                response.put("message", "You have " + MAX_HINTS + " hints remaining.");
+                                sendResponse(out, response);
+                                break;
+
+                            case "leaderboard":
+                                response.put("type", "leaderboard");
+                                response.put("message", "Leaderboard: " + leaderboard);
+                                sendResponse(out, response);
+                                break;
+
+                            case "quit":
+                                response.put("type", "goodbye");
+                                response.put("message", "Thanks for playing, " + name + "! Your score: " + points);
+                                updateLeaderboard(name, points);
+                                sendResponse(out, response);
+                                return;
+
+                            default:
+                                response.put("type", "error");
+                                response.put("message", "Unknown command: " + type);
+                                sendResponse(out, response);
+                                break;
+                        }
+                    }
+                } catch (Exception e) {
+                    System.out.println("Error handling client: " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void sendImageForRound(PrintWriter out, int round) throws Exception {
+        JSONObject response = new JSONObject();
+        response.put("type", "image");
+        
+        if (round - 1 < images.length) {
+            sendImg(images[round - 1], response);
+            response.put("message", "Here's an image for round " + round);
+        } else {
+            response.put("message", "No more images available.");
+        }
+
+        sendResponse(out, response);
+    }
+
+    private static void sendResponse(PrintWriter out, JSONObject response) {
+        out.println(response.toString());
+        out.flush();
+    }
+
+    private static void updateLeaderboard(String name, int points) {
+        leaderboard.put(name, Math.max(leaderboard.getOrDefault(name, 0), points));
+    }
+
+    public static JSONObject sendImg(String filename, JSONObject obj) throws Exception {
+        File file = new File(filename);
+        if (file.exists()) {
+            BufferedImage img = ImageIO.read(file);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(img, "png", baos);
+            String encodedImage = Base64.getEncoder().encodeToString(baos.toByteArray());
+            obj.put("image", encodedImage);
+        } else {
+            obj.put("image", "Image not found");
+        }
+        return obj;
+    }
 }
+
+
