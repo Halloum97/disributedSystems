@@ -1,94 +1,76 @@
-# Assignment 3 Starter Code
 
-## Grid Image Maker Usage
+# Wonder of the World Guessing Game
 
-### Terminal
+## Project Description
+This project is a client-server application for a single-player game in which the client guesses famous Wonders of the World based on images provided by the server. The server hosts a collection of images of famous landmarks and sends these images to the client one at a time for each round of the game. The client can guess the name of the Wonder, request hints, skip to the next Wonder, and check how many hints remain. The game supports multiple rounds, and at the end of the game, the player’s score is displayed, along with a leaderboard showing high scores.
 
-```
-gradle runServer
-```
+## Checklist of Requirements
+- [x] **Display the picture grid and output messages to the client.**
+- [x] **Handle user commands: name, rounds, guess, skip, next, remaining, leaderboard, quit.**
+- [x] **Use JSON protocol for structured client-server communication.**
+- [x] **Server sends images based on rounds and manages hints.**
+- [x] **Leaderboard tracking and persistence of high scores.**
+- [ ] **Implement error handling for invalid commands and unexpected inputs.**
 
-```
-gradle runClient
-```
+## Protocol Description
+The client and server communicate using a JSON-based protocol. Each request from the client includes a `"type"` field that specifies the type of command. Here are the details of each request and possible responses.
 
-## GUI Usage
+### Requests and Responses
+1. **hello**
+   - **Request**: `{ "type": "hello" }`
+   - **Response**: `{ "type": "greeting", "message": "Hello! Please enter your name and age." }`
 
-### Code
+2. **name**
+   - **Request**: `{ "type": "name", "name": "Joe", "age": 15 }`
+   - **Response**: `{ "type": "welcome", "message": "Welcome, Joe! You are now ready to play." }`
 
-1. Create an instance of the GUI
+3. **rounds**
+   - **Request**: `{ "type": "rounds", "rounds": 3 }`
+   - **Response**: `{ "type": "start_game", "message": "Game started with 3 rounds." }`
+   - **Additional Response**: Sends an image for the first round.
 
-   ```
-   ClientGui main = new ClientGui();
-   ```
+4. **guess**
+   - **Request**: `{ "type": "guess", "guess": "Colosseum" }`
+   - **Response (correct)**: `{ "type": "correct_guess", "message": "Correct! Starting next round." }`
+   - **Response (incorrect)**: `{ "type": "incorrect_guess", "message": "Incorrect guess. Try again." }`
+   - **Additional Response**: Sends a new image if the guess was correct.
 
-2. Create a new game and give it a grid dimension
+5. **skip**
+   - **Request**: `{ "type": "skip" }`
+   - **Response**: `{ "type": "skip_round", "message": "Skipping to the next Wonder." }`
+   - **Additional Response**: Sends an image for the next round.
 
-   ```
-   // the pineapple example is 2, but choose whatever dimension of grid you want
-   // you can change the dimension to see how the grid changes size
-   main.newGame(2); 
-   ```
+6. **next**
+   - **Request**: `{ "type": "next" }`
+   - **Response**: `{ "type": "next_hint", "message": "Here's another hint." }`
+   - **Additional Response**: Sends a new hint image for the current round.
 
-*Depending on how you want to run the system, 3 and 4 can be run how you want*
+7. **remaining**
+   - **Request**: `{ "type": "remaining" }`
+   - **Response**: `{ "type": "remaining_hints", "message": "You have X hints remaining." }`
 
-3. Insert image
+8. **leaderboard**
+   - **Request**: `{ "type": "leaderboard" }`
+   - **Response**: `{ "type": "leaderboard", "message": "Leaderboard: {...}" }`
 
-   ```
-   // the filename is the path to an image
-   // the first coordinate(0) is the row to insert in to
-   // the second coordinate(1) is the column to insert in to
-   // you can change coordinates to see the image move around the box
-   main.insertImage("img/Pineapple-Upside-down-cake_0_1.jpg", 0, 1);
-   ```
+9. **quit**
+   - **Request**: `{ "type": "quit" }`
+   - **Response**: `{ "type": "goodbye", "message": "Thanks for playing, Joe! Your score: 30" }`
 
-4. Show GUI
+10. **Errors**
+    - **Response**: `{ "type": "error", "message": "Unknown command: [type]" }`
+    - Sent if an unrecognized or invalid command is received.
 
-   ```
-   // true makes the dialog modal meaning that all interaction allowed is 
-   //   in the windows methods.
-   // false makes the dialog a pop-up which allows the background program 
-   //   that spawned it to continue and process in the background.
-   main.show(true);
-   ```
 
-For the images: The numbering is alwas starting at 1 which is the "main" view, increasing numbers are always turning to the right. So 2 is a 90 degree right turn of 1, while 4 is a 90 degree left turn of 1. 
 
-### ClientGui.java
-#### Summary
+## Program Design for Robustness
+The program is designed to handle unexpected inputs and errors gracefully:
+- **Error Handling**: The server checks for missing or incorrect fields in requests and responds with appropriate error messages without crashing.
+- **Structured Protocol**: By using a JSON-based protocol with clearly defined request and response types, the server ensures that all communication is standardized, reducing the chance of errors.
+- **Command Validation**: The server checks each command type and validates parameters (e.g., name, age, guess) before proceeding with further processing.
 
-> This is the main GUI to display the picture grid. 
-
-#### Methods
-  - show(boolean modal) :  Shows the GUI frame with the current state
-     * NOTE: modal means that it opens the GUI and suspends background processes. Processing still happens in the GUI If it is desired to continue processing in the background, set modal to false.
-   * newGame(int dimension) :  Start a new game with a grid of dimension x dimension size
-   * insertImage(String filename, int row, int col) :  Inserts an image into the grid, this is when you know the file name, use the PicturePanel insertImage if you have a ByteStream
-   * appendOutput(String message) :  Appends text to the output panel
-   * submitClicked() :  Button handler for the submit button in the output panel
-
-### PicturePanel.java
-
-#### Summary
-
-> This is the image grid
-
-#### Methods
-
-- newGame(int dimension) :  Reset the board and set grid size to dimension x dimension
-- insertImage(String fname, int row, int col) :  Insert an image at (col, row)
-- insertImage(ByteArrayInputStream fname, int row, int col) :  Insert an image at (col, row)
-
-### OutputPanel.java
-
-#### Summary
-
-> This is the input box, submit button, and output text area panel
-
-#### Methods
-
-- getInputText() :  Get the input text box text
-- setInputText(String newText) :  Set the input text box text
-- addEventHandlers(EventHandlers handlerObj) :  Add event listeners
-- appendOutput(String message) :  Add message to output text
-
+## Changes Needed for UDP Protocol
+If we were to change from TCP to UDP, we would need to address the following:
+- **Reliability**: Unlike TCP, UDP does not guarantee that packets are delivered in order or even delivered at all. We would need to implement custom mechanisms for acknowledging received packets and handling retries for lost packets.
+- **Connectionless Protocol**: UDP is connectionless, so we would need to identify and track clients based on their IP and port, which would add complexity to the server.
+- **Error Handling and Packet Loss**: Additional logic would be required to detect and handle packet loss, since UDP does not ensure data integrity.
