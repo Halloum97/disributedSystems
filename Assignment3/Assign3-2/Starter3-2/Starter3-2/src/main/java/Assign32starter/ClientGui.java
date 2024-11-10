@@ -1,249 +1,240 @@
 package Assign32starter;
 
 import java.awt.Dimension;
-
-import org.json.*;
+import org.json.JSONObject;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Base64;
 
 import javax.swing.JDialog;
 import javax.swing.WindowConstants;
 
-/**
- * The ClientGui class is a GUI frontend that displays an image grid, an input text box,
- * a button, and a text area for status. 
- * 
- * Methods of Interest
- * ----------------------
- * show(boolean modal) - Shows the GUI frame with current state
- *     -> modal means that it opens GUI and suspends background processes. 
- * 		  Processing still happens in the GUI. If it is desired to continue processing in the 
- *        background, set modal to false.
- * newGame(int dimension) - Start a new game with a grid of dimension x dimension size
- * insertImage(String filename, int row, int col) - Inserts an image into the grid
- * appendOutput(String message) - Appends text to the output panel
- * submitClicked() - Button handler for the submit button in the output panel
- * 
- * Notes
- * -----------
- * > Does not show when created. show() must be called to show he GUI.
- * 
- */
 public class ClientGui implements Assign32starter.OutputPanel.EventHandlers {
-	JDialog frame;
-	PicturePanel picPanel;
-	OutputPanel outputPanel;
-	String currentMess;
+    JDialog frame;
+    PicturePanel picPanel;
+    OutputPanel outputPanel;
+    String currentMessage;
 
-	Socket sock;
-	OutputStream out;
-	ObjectOutputStream os;
-	BufferedReader bufferedReader;
+    Socket sock;
+    OutputStream out;
+    ObjectOutputStream os;
+    BufferedReader bufferedReader;
 
-	// TODO: SHOULD NOT BE HARDCODED change to spec
-	String host = "localhost";
-	int port = 9000;
+    String host = "localhost";
+    int port = 8888;
 
-	/**
-	 * Construct dialog
-	 * @throws IOException 
-	 */
-	public ClientGui(String host, int port) throws IOException {
-		this.host = host; 
-		this.port = port; 
-	
-		frame = new JDialog();
-		frame.setLayout(new GridBagLayout());
-		frame.setMinimumSize(new Dimension(500, 500));
-		frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+    public ClientGui(String host, int port) throws IOException {
+        this.host = host;
+        this.port = port;
 
-		// setup the top picture frame
-		picPanel = new PicturePanel();
-		GridBagConstraints c = new GridBagConstraints();
-		c.gridx = 0;
-		c.gridy = 0;
-		c.weighty = 0.25;
-		frame.add(picPanel, c);
+        frame = new JDialog();
+        frame.setLayout(new GridBagLayout());
+        frame.setMinimumSize(new Dimension(500, 500));
+        frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
-		// setup the input, button, and output area
-		c = new GridBagConstraints();
-		c.gridx = 0;
-		c.gridy = 1;
-		c.weighty = 0.75;
-		c.weightx = 1;
-		c.fill = GridBagConstraints.BOTH;
-		outputPanel = new OutputPanel();
-		outputPanel.addEventHandlers(this);
-		frame.add(outputPanel, c);
+        picPanel = new PicturePanel();
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = 0;
+        c.weighty = 0.25;
+        frame.add(picPanel, c);
 
-		picPanel.newGame(1);
-		insertImage("img/Colosseum1.png", 0, 0);
+        c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridy = 1;
+        c.weighty = 0.75;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.BOTH;
+        outputPanel = new OutputPanel();
+        outputPanel.addEventHandlers(this);
+        frame.add(outputPanel, c);
 
-		open(); // opening server connection here
-		currentMess = "{'type': 'start'}"; // very initial start message for the connection
-		try {
-			os.writeObject(currentMess);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+        picPanel.newGame(1);
+        insertImage("img/Colosseum1.png", 0, 0);
 
-		String string = this.bufferedReader.readLine();
-		System.out.println("Got a connection to server");
-		JSONObject json = new JSONObject(string);
-		outputPanel.appendOutput(json.getString("value")); // putting the message in the outputpanel
+        open();
+        currentMessage = "{\"type\": \"hello\"}"; // Initial "hello" message to the server
+        sendRequest(currentMessage);
 
-		// reading out the image (abstracted here as just a string)
-		System.out.println("Pretend I got an image: " + json.getString("image"));
-		/// would put image in picture panel
-		close(); //closing the connection to server
+        receiveResponse();
+        close();
+    }
 
-		// Now Client interaction only happens when the submit button is used, see "submitClicked()" method
-	}
+    public void show(boolean makeModal) {
+        frame.pack();
+        frame.setModal(makeModal);
+        frame.setVisible(true);
+    }
 
-	/**
-	 * Shows the current state in the GUI
-	 * @param makeModal - true to make a modal window, false disables modal behavior
-	 */
-	public void show(boolean makeModal) {
-		frame.pack();
-		frame.setModal(makeModal);
-		frame.setVisible(true);
-	}
+    public void newGame(int dimension) {
+        picPanel.newGame(dimension);
+        outputPanel.appendOutput("Started new game with a " + dimension + "x" + dimension + " board.");
+    }
 
-	/**
-	 * Creates a new game and set the size of the grid 
-	 * @param dimension - the size of the grid will be dimension x dimension
-	 * No changes should be needed here
-	 */
-	public void newGame(int dimension) {
-		picPanel.newGame(1);
-		outputPanel.appendOutput("Started new game with a " + dimension + "x" + dimension + " board.");
-	}
+    public boolean insertImage(String filename, int row, int col) throws IOException {
+        String error = "";
+        try {
+            if (picPanel.insertImage(filename, row, col)) {
+                outputPanel.appendOutput("Inserted " + filename + " at (" + row + ", " + col + ")");
+                return true;
+            }
+            error = "File(\"" + filename + "\") not found.";
+        } catch (PicturePanel.InvalidCoordinateException e) {
+            error = e.toString();
+        }
+        outputPanel.appendOutput(error);
+        return false;
+    }
 
-	/**
-	 * Insert an image into the grid at position (col, row)
-	 * 
-	 * @param filename - filename relative to the root directory
-	 * @param row - the row to insert into
-	 * @param col - the column to insert into
-	 * @return true if successful, false if an invalid coordinate was provided
-	 * @throws IOException An error occured with your image file
-	 */
-	public boolean insertImage(String filename, int row, int col) throws IOException {
-		System.out.println("Image insert");
-		String error = "";
-		try {
-			// insert the image
-			if (picPanel.insertImage(filename, row, col)) {
-				// put status in output
-				outputPanel.appendOutput("Inserting " + filename + " in position (" + row + ", " + col + ")"); // you can of course remove this
-				return true;
-			}
-			error = "File(\"" + filename + "\") not found.";
-		} catch(PicturePanel.InvalidCoordinateException e) {
-			// put error in output
-			error = e.toString();
-		}
-		outputPanel.appendOutput(error);
-		return false;
-	}
-
-	/**
-	 * Submit button handling
-	 * 
-	 * TODO: This is where your logic will go or where you will call appropriate methods you write. 
-	 * Right now this method opens and closes the connection after every interaction, if you want to keep that or not is up to you. 
-	 */
 	@Override
 	public void submitClicked() {
 		try {
-		open(); // opening a server connection again
-		System.out.println("submit clicked ");
-
-		// Pulls the input box text
-		String input = outputPanel.getInputText();
-
-		// TODO evaluate the input from above and create a request for client. 
-
-		// send request to server
-		try {
-			  os.writeObject("Blub"); // this will crash the server, since it is not a JSON and thus the server will not handle it. 
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			open();
+			String input = outputPanel.getInputText().trim();
+			JSONObject request = new JSONObject();
+	
+			// Check for specific commands
+			if (input.matches("\\d+")) { // If input is a number, assume it's for rounds
+				request.put("type", "rounds");
+				request.put("rounds", Integer.parseInt(input));
+			} else if (input.equalsIgnoreCase("skip")) {
+				request.put("type", "skip");
+			} else if (input.equalsIgnoreCase("next")) {
+				request.put("type", "next");
+			} else if (input.equalsIgnoreCase("remaining")) {
+				request.put("type", "remaining");
+			} else if (input.equalsIgnoreCase("leaderboard")) {
+				request.put("type", "leaderboard");
+			} else if (input.equalsIgnoreCase("quit")) {
+				request.put("type", "quit");
+			} else if (input.toLowerCase().startsWith("name:")) { // For setting name and age
+				String[] parts = input.split(" ");
+				if (parts.length >= 4) {
+					String name = parts[1];
+					String age = parts[3];
+					request.put("type", "name");
+					request.put("name", name);
+					request.put("age", Integer.parseInt(age));
+				} else {
+					outputPanel.appendOutput("Invalid format. Use 'name: [name] age: [age]'.");
+					return;
+				}
+			} else { // Default case assumes it's a guess
+				request.put("type", "guess");
+				request.put("guess", input);
 			}
-
-		// wait for an answer and handle accordingly
-		try {
-			System.out.println("Waiting on response");
-			String string = this.bufferedReader.readLine();
-			System.out.println(string);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		close();
+	
+			sendRequest(request.toString());
+			receiveResponse();
+			close();
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-	}
-
-	/**
-	 * Key listener for the input text box
-	 * 
-	 * Change the behavior to whatever you need
-	 */
-	@Override
-	public void inputUpdated(String input) {
-		if (input.equals("surprise")) {
-			outputPanel.appendOutput("You found me!");
-		}
-	}
-
-	public void open() throws UnknownHostException, IOException {
-		this.sock = new Socket(host, port); // connect to host and socket
-
-		// get output channel
-		this.out = sock.getOutputStream();
-		// create an object output writer (Java only)
-		this.os = new ObjectOutputStream(out);
-		this.bufferedReader = new BufferedReader(new InputStreamReader(sock.getInputStream()));
-
 	}
 	
-	public void close() {
+	
+	
+
+    @Override
+    public void inputUpdated(String input) {
+        if (input.equals("surprise")) {
+            outputPanel.appendOutput("You found me!");
+        }
+    }
+
+    private void sendRequest(String message) throws IOException {
+        os.writeObject(message);
+        os.flush();
+    }
+
+    private void receiveResponse() throws IOException {
+    String responseStr = bufferedReader.readLine();
+    JSONObject response = new JSONObject(responseStr);
+
+    String type = response.optString("type", "unknown");
+    switch (type) {
+        case "greeting":
+        case "welcome":
+        case "menu":
+        case "start_game":
+        case "correct_guess":
+        case "incorrect_guess":
+        case "skip_round":
+        case "next_hint":
+        case "remaining_hints":
+        case "leaderboard":
+        case "goodbye":
+            outputPanel.appendOutput(response.optString("message", "No message"));
+            break;
+
+        case "error":
+            outputPanel.appendOutput("Error: " + response.optString("message", "Unknown error"));
+            break;
+
+        case "image":
+            String imageEncoded = response.optString("image", "");
+            if (!imageEncoded.isEmpty()) {
+                displayDecodedImage(imageEncoded);
+            } else {
+                outputPanel.appendOutput("No image data received.");
+            }
+            break;
+
+        default:
+            outputPanel.appendOutput("Unknown response type received.");
+   		}
+	}
+
+private void displayDecodedImage(String imageEncoded) {
+    try {
+        byte[] imageBytes = Base64.getDecoder().decode(imageEncoded);
+        ByteArrayInputStream is = new ByteArrayInputStream(imageBytes);
+        
+        // Display the decoded image in the top-left cell (0, 0)
+        picPanel.insertImage(is, 0, 0);
+        outputPanel.appendOutput("Image received and displayed.");
+    } catch (PicturePanel.InvalidCoordinateException e) {
+        outputPanel.appendOutput("Error: Invalid coordinates for image display.");
+    } catch (Exception e) {
+        outputPanel.appendOutput("Error displaying image: " + e.getMessage());
+    }
+}
+
+
+    public void open() throws UnknownHostException, IOException {
+        this.sock = new Socket(host, port);
+        this.out = sock.getOutputStream();
+        this.os = new ObjectOutputStream(out);
+        this.bufferedReader = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+    }
+
+    public void close() {
         try {
-            if (out != null)  out.close();
-            if (bufferedReader != null)   bufferedReader.close(); 
+            if (out != null) out.close();
+            if (bufferedReader != null) bufferedReader.close();
             if (sock != null) sock.close();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-	public static void main(String[] args) throws IOException {
-		// create the frame
+    public static void main(String[] args) throws IOException {
+        try {
+            String host = "localhost";
+            int port = 8888;
 
-
-		try {
-			String host = "localhost";
-			int port = 8888;
-
-
-			ClientGui main = new ClientGui(host, port);
-			main.show(true);
-
-
-		} catch (Exception e) {e.printStackTrace();}
-
-
-
-	}
+            ClientGui main = new ClientGui(host, port);
+            main.show(true);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }
