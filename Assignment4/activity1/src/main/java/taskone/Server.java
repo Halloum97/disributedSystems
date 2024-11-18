@@ -32,60 +32,66 @@ class Server {
         performer = new Performer(strings);
 
         if (args.length != 1) {
-            // gradle runServer -Pport=9099 -q --console=plain
-            System.out.println("Usage: gradle runServer -Pport=9099 -q --console=plain");
+            // gradle runServer -Pport=8000 -q --console=plain
+            System.out.println("Usage: gradle runServer -Pport=8000 -q --console=plain");
             System.exit(1);
         }
-        port = -1;
+
         try {
             port = Integer.parseInt(args[0]);
         } catch (NumberFormatException nfe) {
             System.out.println("[Port] must be an integer");
             System.exit(2);
+            return; // to satisfy compiler
         }
+
         ServerSocket server = new ServerSocket(port);
-        System.out.println("Server Started...");
+        System.out.println("Server Started on port " + port);
+
         while (true) {
             System.out.println("Accepting a Request...");
             conn = server.accept();
+            System.out.println("Connected to client");
             doPerform();
-
         }
     }
 
     public static void doPerform() {
         boolean quit = false;
-        OutputStream out = null;
-        InputStream in = null;
-        try {
-            out = conn.getOutputStream();
-            in = conn.getInputStream();
-            System.out.println("Server connected to client:");
+        try (OutputStream out = conn.getOutputStream(); InputStream in = conn.getInputStream()) {
             while (!quit) {
                 byte[] messageBytes = NetworkUtils.receive(in);
                 JSONObject message = JsonUtils.fromByteArray(messageBytes);
-                JSONObject returnMessage = new JSONObject();
+                JSONObject returnMessage;
 
                 int choice = message.getInt("selected");
                 switch (choice) {
-                    case (1):
-                        String inStr = (String) message.get("data");
+                    case 1: // Add
+                        String inStr = message.getString("data");
                         returnMessage = performer.add(inStr);
                         break;
-                    default:
-                        returnMessage = performer.error("Invalid selection: " + choice
-                                + " is not an option");
+                    case 2: // Display
+                        returnMessage = performer.display();
+                        break;
+                    case 3: // Count
+                        returnMessage = performer.count();
+                        break;
+                    case 0: // Quit
+                        returnMessage = performer.quit();
+                        quit = true;
+                        break;
+                    default: // Invalid input
+                        returnMessage = performer.error("Invalid selection: " + choice + " is not an option");
                         break;
                 }
-                // we are converting the JSON object we have to a byte[]
+
+                // Send response back to the client
                 byte[] output = JsonUtils.toByteArray(returnMessage);
                 NetworkUtils.send(out, output);
             }
-            // close the resource
-            System.out.println("close the resources of client ");
-            out.close();
-            in.close();
-        } catch (IOException | InterruptedException e) {
+
+            System.out.println("Closing connection with client");
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }

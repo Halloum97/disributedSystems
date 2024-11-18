@@ -23,25 +23,34 @@ import static java.lang.Thread.sleep;
  * Class: Performer 
  * Description: Threaded Performer for server tasks.
  */
-class Performer {
-
-    private StringList state;
-
+public class Performer {
+    private final StringList state;
 
     public Performer(StringList strings) {
         this.state = strings;
     }
 
-    public JSONObject add(String str) throws InterruptedException {
-        System.out.println("Start add"); 
-        JSONObject json = new JSONObject();
-        json.put("datatype", 1);
-        json.put("type", "add");
-        sleep(6000); // to make this take a bit longer
-        state.add(str);
-        json.put("data", state.toString());
-        System.out.println("end add");
-        return json;
+    public JSONObject add(String str) {
+        synchronized (state) {
+            state.add(str);
+            return createResponse("add", state.toString());
+        }
+    }
+
+    public JSONObject display() {
+        synchronized (state) {
+            return createResponse("display", state.toString());
+        }
+    }
+
+    public JSONObject count() {
+        synchronized (state) {
+            return createResponse("count", Integer.toString(state.size()));
+        }
+    }
+
+    public JSONObject quit() {
+        return createResponse("quit", "Goodbye!");
     }
 
     public static JSONObject error(String err) {
@@ -50,5 +59,10 @@ class Performer {
         return json;
     }
 
-
+    private JSONObject createResponse(String type, String data) {
+        JSONObject json = new JSONObject();
+        json.put("type", type);
+        json.put("data", data);
+        return json;
+    }
 }

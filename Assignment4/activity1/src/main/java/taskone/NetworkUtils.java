@@ -9,6 +9,9 @@ package taskone;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Socket;
+
+import org.json.JSONObject;
 
 /**
  * Class: NetworkUtils 
@@ -71,5 +74,52 @@ public class NetworkUtils {
             return new byte[0];
         }
         return message;
+    }
+
+        public static void processClient(Socket clientSocket, Performer performer) {
+        try (OutputStream out = clientSocket.getOutputStream();
+             InputStream in = clientSocket.getInputStream()) {
+
+            boolean quit = false;
+
+            while (!quit) {
+                // Receive request
+                byte[] requestBytes = receive(in);
+                JSONObject request = JsonUtils.fromByteArray(requestBytes);
+
+                // Handle request
+                JSONObject response;
+                int choice = request.getInt("selected");
+
+                switch (choice) {
+                    case 1: // Add
+                        String data = request.getString("data");
+                        response = performer.add(data);
+                        break;
+                    case 2: // Display
+                        response = performer.display();
+                        break;
+                    case 3: // Count
+                        response = performer.count();
+                        break;
+                    case 0: // Quit
+                        response = performer.quit();
+                        quit = true;
+                        break;
+                    default: // Invalid selection
+                        response = Performer.error("Invalid choice: " + choice);
+                        break;
+                }
+
+                // Send response
+                byte[] responseBytes = JsonUtils.toByteArray(response);
+                send(out, responseBytes);
+            }
+
+            System.out.println("Client disconnected");
+
+        } catch (IOException e) {
+            System.err.println("Error communicating with client: " + e.getMessage());
+        }
     }
 }

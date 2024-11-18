@@ -42,3 +42,41 @@ task runClient(type: JavaExec) {
   }
 }
 
+// Task 1: Single-threaded server
+task runTask1(type: JavaExec) {
+    group = 'server'
+    description = 'Run the single-threaded server'
+    
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'taskone.Server'
+
+    // Pass port as an argument, default to 8000
+    args = project.hasProperty('port') ? [project.getProperty('port')] : ['8000']
+}
+
+// Task 2: Multi-threaded server
+task runTask2(type: JavaExec) {
+    group = 'server'
+    description = 'Run the multi-threaded server'
+    
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'taskone.ThreadedServer'
+
+    // Pass port as an argument, default to 8000
+    args = project.hasProperty('port') ? [project.getProperty('port')] : ['8000']
+}
+
+// Task 3: Thread Pool server
+task runTask3(type: JavaExec) {
+    group = 'server'
+    description = 'Run the thread-pool-based server'
+    
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'taskone.ThreadPoolServer'
+
+    // Pass port and maxThreads as arguments, defaults: port=8000, maxThreads=5
+    args = project.hasProperty('port') && project.hasProperty('maxThreads') ? 
+          [project.getProperty('port'), project.getProperty('maxThreads')] : 
+          ['8000', '5']
+}
+
