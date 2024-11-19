@@ -5,16 +5,17 @@ import buffers.ResponseProtos.*;
 
 import java.io.*;
 import java.net.Socket;
+import java.util.List;
 
 class SockBaseClient {
-    public static void main (String[] args) throws Exception {
+    public static void main(String[] args) throws Exception {
         Socket serverSock = null;
         OutputStream out = null;
         InputStream in = null;
-        int i1=0, i2=0;
+    
         int port = 8000; // default port
-
-        // Make sure two arguments are given
+    
+        // Ensure correct arguments
         if (args.length != 2) {
             System.out.println("Expected arguments: <host(String)> <port(int)>");
             System.exit(1);
@@ -26,42 +27,56 @@ class SockBaseClient {
             System.out.println("[Port] must be integer");
             System.exit(2);
         }
-
-        // Build the first request object just including the name
-        Request op = nameRequest().build();
-        Response response;
+    
         try {
-            // connect to the server
+            // Connect to server
             serverSock = new Socket(host, port);
-
-            // write to the server
             out = serverSock.getOutputStream();
             in = serverSock.getInputStream();
-
+    
+            // Send name request
+            Request op = nameRequest().build();
             op.writeDelimitedTo(out);
-
+    
             while (true) {
-                // read from the server
-                response = Response.parseDelimitedFrom(in);
+                // Read server response
+                Response response = Response.parseDelimitedFrom(in);
                 System.out.println("Got a response: " + response.toString());
-
+    
                 Request.Builder req = Request.newBuilder();
-
+    
                 switch (response.getResponseType()) {
                     case GREETING:
                         System.out.println(response.getMessage());
                         req = chooseMenu(req, response);
                         break;
+    
+                    case LEADERBOARD:
+                        displayLeaderboard(response);
+                        req = chooseMenu(req, response);
+                        break;
+    
+                    case PLAY:
+                        System.out.println("Game board:\n" + response.getBoard());
+                        System.out.println(response.getMessage());
+                        req = playGameMenu();
+                        break;
+    
+                    case BYE:
+                        System.out.println(response.getMessage());
+                        return;
+    
                     case ERROR:
-                        System.out.println("Error: " + response.getMessage() + "Type: " + response.getErrorType());
-                        if (response.getNext() == 1) {
-                            req = nameRequest();
-                        } else {
-                            System.out.println("That error type is not handled yet");
-                            req = nameRequest();
-                        }
+                        System.out.println("Error: " + response.getMessage() + " Type: " + response.getErrorType());
+                        req = chooseMenu(req, response);
+                        break;
+    
+                    default:
+                        System.out.println("Unhandled response type: " + response.getResponseType());
+                        req = chooseMenu(req, response);
                         break;
                 }
+    
                 req.build().writeDelimitedTo(out);
             }
         } catch (Exception e) {
@@ -70,6 +85,7 @@ class SockBaseClient {
             exitAndClose(in, out, serverSock);
         }
     }
+    
 
     /**
      * handles building a simple name requests, asks the user for their name and builds the request
@@ -94,19 +110,36 @@ class SockBaseClient {
             System.out.println(response.getMenuoptions());
             System.out.print("Enter a number 1-3: ");
             BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
-            String menu_select = stdin.readLine();
-            System.out.println(menu_select);
-            switch (menu_select) {
-                // needs to include the other requests
-                case "2":
-                    req.setOperationType(Request.OperationType.START); // this is not a complete START request!! Just as example
+            String menuSelect = stdin.readLine();
+    
+            switch (menuSelect) {
+                case "1": // Request leaderboard
+                    req.setOperationType(Request.OperationType.LEADERBOARD);
                     return req;
+    
+                case "2": // Start game
+                    req.setOperationType(Request.OperationType.START);
+                    System.out.print("Enter difficulty level (1-20): ");
+                    String difficulty = stdin.readLine();
+                    try {
+                        req.setDifficulty(Integer.parseInt(difficulty));
+                    } catch (NumberFormatException e) {
+                        System.out.println("Invalid difficulty. Defaulting to 4.");
+                        req.setDifficulty(4);
+                    }
+                    return req;
+    
+                case "3": // Quit game
+                    req.setOperationType(Request.OperationType.QUIT);
+                    return req;
+    
                 default:
-                    System.out.println("\nNot a valid choice, please choose again");
+                    System.out.println("\nNot a valid choice, please choose again.");
                     break;
             }
         }
     }
+    
 
     /**
      * Exits the connection
@@ -181,6 +214,67 @@ class SockBaseClient {
 
         return coordinates;
     }
+
+    private static void displayLeaderboard(Response response) {
+        System.out.println(response.getMessage());
+        List<Entry> leaderboard = response.getLeaderList();
+        leaderboard.stream()
+                .sorted((e1, e2) -> e2.getPoints() - e1.getPoints()) // Sort by points descending
+                .forEach(entry -> System.out.println(entry.getName() + ": " + entry.getPoints() + " points, " + entry.getLogins() + " logins"));
+    }
+
+    static Request.Builder playGameMenu() throws IOException {
+        Request.Builder req = Request.newBuilder();
+        BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
+    
+        System.out.println("Game Menu:");
+        System.out.println("1. Enter a move");
+        System.out.println("2. Clear area");
+        System.out.println("3. Quit game");
+    
+        String choice = stdin.readLine();
+        switch (choice) {
+            case "1": // Enter a move
+                System.out.print("Enter row (1-9): ");
+                int row = Integer.parseInt(stdin.readLine()) - 1;
+    
+                System.out.print("Enter column (1-9): ");
+                int column = Integer.parseInt(stdin.readLine()) - 1;
+    
+                System.out.print("Enter value (1-9): ");
+                int value = Integer.parseInt(stdin.readLine());
+    
+                req.setOperationType(Request.OperationType.UPDATE)
+                   .setRow(row)
+                   .setColumn(column)
+                   .setValue(value);
+                break;
+    
+            case "2": // Clear area
+                try {
+                    int[] coordinates = boardSelectionClear();
+                    req.setOperationType(Request.OperationType.CLEAR)
+                    .setRow(coordinates[0])
+                    .setColumn(coordinates[1])
+                    .setValue(coordinates[2]);
+                } catch (Exception e) {
+                    System.out.println("Error during board selection: " + e.getMessage());
+                    return playGameMenu(); // Re-display the game menu
+                }
+                break;
+    
+            case "3": // Quit game
+                req.setOperationType(Request.OperationType.QUIT);
+                break;
+    
+            default:
+                System.out.println("Invalid choice. Returning to game menu.");
+                return playGameMenu();
+        }
+    
+        return req;
+    }
+    
 
     static int[] boardSelectionClearValue() throws Exception {
         int[] coordinates = new int[3];

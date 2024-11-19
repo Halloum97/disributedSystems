@@ -1,5 +1,10 @@
 package server;
 import java.util.*;
+
+import com.google.protobuf.NullValue;
+
+import buffers.ResponseProtos.Response;
+
 import java.io.*;
 
 /**
@@ -436,4 +441,82 @@ public class Game {
     public int setPoints(int diff) {
         return points += diff;
     }
+
+    public Response.EvalType updateCell(int row, int col, int value) {
+        if (referenceBoard[row][col] != 'X') {
+            return Response.EvalType.PRESET_VALUE; // The cell is part of the original puzzle
+        }
+        if (isExistsInRow(row)) {
+            return Response.EvalType.DUP_ROW; // The value already exists in the row
+        }
+        if (isExistsInCol(col)) {
+            return Response.EvalType.DUP_COL; // The value already exists in the column
+        }
+        if (isExistsInGrid(row, col)) {
+            return Response.EvalType.DUP_GRID; // The value already exists in the 3x3 grid
+        }
+
+        // Update the player's board
+        playerBoard[row][col] = (char) (value + '0');
+        points += 1; // Add points for a valid move
+        won = checkWon();
+
+        return Response.EvalType.UPDATE; // Successfully updated the cell
+    }
+
+    public Response.ResponseType clearCell(int row, int col, int value) {
+        switch (value) {
+            case 1: // Clear a single cell
+                if (referenceBoard[row][col] == 'X') {
+                    playerBoard[row][col] = 'X';
+                    points -= 5; // Deduct points for clearing a cell
+                    return Response.ResponseType.PLAY;
+                }
+                return Response.ResponseType.ERROR; // Cannot clear a preset value
+    
+            case 2: // Clear the entire row
+                for (int j = 0; j < size; j++) {
+                    if (referenceBoard[row][j] == 'X') {
+                        playerBoard[row][j] = 'X';
+                    }
+                }
+                points -= 5; // Deduct points for clearing the row
+                return Response.ResponseType.PLAY;
+    
+            case 3: // Clear the entire column
+                for (int i = 0; i < size; i++) {
+                    if (referenceBoard[i][col] == 'X') {
+                        playerBoard[i][col] = 'X';
+                    }
+                }
+                points -= 5; // Deduct points for clearing the column
+                return Response.ResponseType.PLAY;
+    
+            case 4: // Clear the 3x3 grid
+                int startRow = (row / 3) * 3;
+                int startCol = (col / 3) * 3;
+                for (int i = startRow; i < startRow + 3; i++) {
+                    for (int j = startCol; j < startCol + 3; j++) {
+                        if (referenceBoard[i][j] == 'X') {
+                            playerBoard[i][j] = 'X';
+                        }
+                    }
+                }
+                points -= 5; // Deduct points for clearing the grid
+                return Response.ResponseType.PLAY;
+    
+            case 5: // Clear the entire board
+                for (int i = 0; i < size; i++) {
+                    System.arraycopy(referenceBoard[i], 0, playerBoard[i], 0, size);
+                }
+                points -= 5; // Deduct points for clearing the board
+                return Response.ResponseType.PLAY;
+    
+            default:
+                return Response.ResponseType.ERROR; // Invalid clear type
+        }
+    }
+     
+    
+
 }

@@ -33,5 +33,19 @@ Now you can run the client and server, please follow these instructions to start
 # Readme checklist:
 
 
-# Requirements (If checked off then completed and includes debugging)
-- 
+## Requirements (If checked off then completed and includes debugging)
+
+# Server Requirements
+* Threading: The server handles multiple client connections simultaneously.
+* Leaderboard Persistence: The leaderboard is saved to a file and loaded during server startup.
+* Protobuf Protocol: Requests and responses adhere strictly to the Protobuf protocol.
+* Logging: Logs all interactions, such as connections, gameplay, and leaderboard updates.
+# Client Requirements
+* Main Menu:
+ * View leaderboard.
+ * Start a new game (select difficulty).
+ * Quit the game.
+* In-Game Menu:
+ * Play moves by specifying row, column, and value.
+ * Clear specific areas of the board or reset the board.
+* Error Handling: Displays error messages from the server and validates inputs locally.

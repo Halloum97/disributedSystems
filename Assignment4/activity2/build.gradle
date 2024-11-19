@@ -26,7 +26,7 @@ test {
 sourceSets {
     main {
         java {
-            srcDirs 'build/generated/source/proto/main/java/buffers'
+            srcDirs 'build/generated/source/proto/main/java'
         }
     }
 }

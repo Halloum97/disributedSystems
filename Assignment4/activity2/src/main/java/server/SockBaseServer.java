@@ -3,12 +3,17 @@ package server;
 import buffers.RequestProtos.*;
 import buffers.ResponseProtos.*;
 
+
+
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 class SockBaseServer {
     static String logFilename = "logs.txt";
@@ -32,6 +37,8 @@ class SockBaseServer {
     private int currentState =1; // I used something like this to keep track of where I am in the game, you can decide if you want that as well
 
     private static boolean grading = true; // if the grading board should be used
+    private static ConcurrentHashMap<String, LeaderboardEntry> leaderboard = new ConcurrentHashMap<>();
+
 
     public SockBaseServer(Socket sock, Game game, int id) {
         this.clientSocket = sock;
@@ -51,32 +58,38 @@ class SockBaseServer {
     public void startGame() throws IOException {
         try {
             while (true) {
-                // read the proto object and put into new object
                 Request op = Request.parseDelimitedFrom(in);
                 System.out.println("Got request: " + op.toString());
                 Response response;
-
                 boolean quit = false;
-
-                // should handle all the other request types here, my advice is to put them in methods similar to nameRequest()
+    
                 switch (op.getOperationType()) {
                     case NAME:
-                        if (op.getName().isBlank()) {
-                            response = error(1, "name");
-                        } else {
-                            response = nameRequest(op);
-                        }
+                        response = nameRequest(op);
+                        break;
+                    case LEADERBOARD:
+                        response = leaderboardRequest();
                         break;
                     case START:
-                        response = startGame(op); // not complete!
-
+                        response = startGameRequest(op);
+                        break;
+                    case UPDATE:
+                        response = updateRequest(op);
+                        break;
+                    case CLEAR:
+                        response = clearRequest(op);
+                        break;
+                    case QUIT:
+                        response = quit();
+                        quit = true;
                         break;
                     default:
                         response = error(2, op.getOperationType().name());
                         break;
                 }
+    
                 response.writeDelimitedTo(out);
-
+    
                 if (quit) {
                     return;
                 }
@@ -86,13 +99,13 @@ class SockBaseServer {
         } catch (Exception ex) {
             Response error = error(0, "Unexpected server error: " + ex.getMessage());
             error.writeDelimitedTo(out);
-        }
-        finally {
+        } finally {
             System.out.println("Client ID " + id + " disconnected");
             this.inGame = false;
             exitAndClose(in, out, clientSocket);
         }
     }
+    
 
     void exitAndClose(InputStream in, OutputStream out, Socket serverSock) throws IOException {
         if (in != null)   in.close();
@@ -221,41 +234,200 @@ class SockBaseServer {
         }
     }
 
+    private Response leaderboardRequest() {
+        System.out.println("Leaderboard request received");
+    
+        List<Entry> leaderboardEntries = new ArrayList<>();
+        for (LeaderboardEntry entry : leaderboard.values()) {
+            leaderboardEntries.add(
+                Entry.newBuilder()
+                    .setName(entry.getName())
+                    .setPoints(entry.getPoints())
+                    .setLogins(entry.getLogins())
+                    .build()
+            );
+        }
+    
+        return Response.newBuilder()
+                .setResponseType(Response.ResponseType.LEADERBOARD)
+                .addAllLeader(leaderboardEntries)
+                .setMessage("Current Leaderboard:")
+                .build();
+    }
+    
+    
 
-    public static void main (String[] args) throws Exception {
+    private Response startGameRequest(Request op) throws IOException {
+        System.out.println("Start game request received");
+    
+        int difficulty = op.hasDifficulty() ? op.getDifficulty() : 4; // Default difficulty level
+        game.newGame(grading, difficulty);
+    
+        System.out.println(game.getDisplayBoard());
+    
+        return Response.newBuilder()
+                .setResponseType(Response.ResponseType.START)
+                .setBoard(game.getDisplayBoard()) // Send the generated board to the client
+                .setMessage("New game started with difficulty " + difficulty)
+                .setNext(3) // Move to game menu
+                .build();
+    }
+
+    private Response updateRequest(Request op) throws IOException {
+        System.out.println("Update request received");
+    
+        if (!op.hasRow() || !op.hasColumn() || !op.hasValue()) {
+            return error(1, "Update fields (row, column, value) are missing");
+        }
+    
+        int row = op.getRow();
+        int column = op.getColumn();
+        int value = op.getValue();
+    
+        // Update the cell and get the evaluation type
+        Response.EvalType evalType = game.updateCell(row, column, value);
+        String updatedBoard = game.getDisplayBoard();
+    
+        // If the move was valid, update the leaderboard
+        if (evalType == Response.EvalType.UPDATE) {
+            updateLeaderboard(name, game.getPoints()); // Update the leaderboard with the player's name and points
+        }
+    
+        return Response.newBuilder()
+                .setResponseType(Response.ResponseType.PLAY)
+                .setType(evalType)
+                .setBoard(updatedBoard)
+                .setMessage(evalType == Response.EvalType.UPDATE ? "Move processed" : "Invalid move")
+                .build();
+    }
+
+    private void updateLeaderboard(String playerName, int points) {
+        leaderboard.compute(playerName, (key, entry) -> {
+            if (entry == null) {
+                return new LeaderboardEntry(playerName, points, 1);
+            } else {
+                entry.addPoints(points);
+                entry.incrementLogins();
+                return entry;
+            }
+        });
+    
+        // Save the leaderboard to file after every update
+        saveLeaderboardToFile();
+    }
+    
+    public static void saveLeaderboardToFile() {
+        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream("leaderboard.dat"))) {
+            oos.writeObject(leaderboard);
+            System.out.println("Leaderboard saved to file.");
+        } catch (IOException e) {
+            System.err.println("Error saving leaderboard: " + e.getMessage());
+        }
+    }
+    
+    @SuppressWarnings("unchecked")
+    public static void loadLeaderboardFromFile() {
+        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream("leaderboard.dat"))) {
+            leaderboard = (ConcurrentHashMap<String, LeaderboardEntry>) ois.readObject();
+            System.out.println("Leaderboard loaded from file.");
+        } catch (IOException | ClassNotFoundException e) {
+            System.out.println("No existing leaderboard file found. Starting fresh.");
+            leaderboard = new ConcurrentHashMap<>();
+        }
+    }
+    
+    
+
+    private Response clearRequest(Request op) throws IOException {
+        System.out.println("Clear request received");
+    
+        // Validate that the request includes required fields
+        if (!op.hasRow() || !op.hasColumn() || !op.hasValue()) {
+            return error(1, "Clear fields (row, column, value) are missing");
+        }
+    
+        int row = op.getRow();
+        int column = op.getColumn();
+        int value = op.getValue();
+    
+        // Call clearCell to process the clear operation
+        Response.ResponseType resultType = game.clearCell(row, column, value);
+    
+        if (resultType == Response.ResponseType.ERROR) { // Handle invalid operations
+            return Response.newBuilder()
+                    .setResponseType(Response.ResponseType.ERROR)
+                    .setMessage("Invalid clear operation. Please check the inputs (row, column, value).")
+                    .build();
+        }
+    
+        // If successful, return the updated board and success message
+        String updatedBoard = game.getDisplayBoard();
+    
+        return Response.newBuilder()
+                .setResponseType(resultType) // This will be ResponseType.PLAY for successful clears
+                .setBoard(updatedBoard)
+                .setMessage("Clear operation processed successfully.")
+                .build();
+    }    
+    
+    
+    
+    
+    public static void main(String[] args) throws Exception {
         if (args.length != 2) {
-            System.out.println("Expected arguments: <port(int)> <delay(int)>");
+            System.out.println("Expected arguments: <port(int)> <grading(boolean)>");
             System.exit(1);
         }
-        int port = 8000; // default port
+    
+        int port = 8000;
         grading = Boolean.parseBoolean(args[1]);
-        Socket clientSocket = null;
-        ServerSocket socket = null;
-
+        final ServerSocket[] serverSocket = {null};
+    
+        // Load the leaderboard from file during server startup
+        loadLeaderboardFromFile();
+    
         try {
             port = Integer.parseInt(args[0]);
-        } catch (NumberFormatException nfe) {
-            System.out.println("[Port|sleepDelay] must be an integer");
-            System.exit(2);
-        }
-        try {
-            socket = new ServerSocket(port);
-            System.out.println("Server started..");
-        } catch(Exception e) {
+            serverSocket[0] = new ServerSocket(port);
+            System.out.println("Server started on port " + port + "...");
+        } catch (Exception e) {
             e.printStackTrace();
             System.exit(2);
         }
+    
+        ExecutorService executor = Executors.newCachedThreadPool();
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Shutting down server...");
+            try {
+                if (serverSocket[0] != null && !serverSocket[0].isClosed()) {
+                    serverSocket[0].close();
+                }
+                saveLeaderboardToFile(); // Save leaderboard before shutdown
+            } catch (IOException e) {
+                System.err.println("Error during shutdown: " + e.getMessage());
+            }
+            executor.shutdown();
+        }));
+    
         int id = 1;
         while (true) {
             try {
-                clientSocket = socket.accept();
+                Socket clientSocket = serverSocket[0].accept();
                 System.out.println("Attempting to connect to client-" + id);
                 Game game = new Game();
                 SockBaseServer server = new SockBaseServer(clientSocket, game, id++);
-                server.startGame();
+                executor.execute(() -> {
+                    try {
+                        server.startGame();
+                    } catch (IOException e) {
+                        System.err.println("Error handling client: " + e.getMessage());
+                    }
+                });
             } catch (Exception e) {
-                System.out.println("Error in accepting client connection.");
+                System.out.println("Error accepting client connection: " + e.getMessage());
             }
         }
-    }
+    }    
+    
+    
 }

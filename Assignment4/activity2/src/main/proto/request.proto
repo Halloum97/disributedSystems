@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package operation;
+package proto;
 
 option java_package = "buffers";
 option java_outer_classname = "RequestProtos";
