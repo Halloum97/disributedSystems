@@ -175,6 +175,34 @@ task runNode(type: JavaExec) {
   args regOn
 }
 
+task runClientAuto(type: JavaExec) {
+    dependsOn arguments
+    classpath = sourceSets.main.runtimeClasspath
+    description = "Run Client with Automated Tests"
+    main = 'example.grpcclient.Client'
+    args serviceHost
+    args servicePort
+    args registryHost
+    args grpcPort
+    args message
+    args 'true' // This sets the autoMode to true
+}
+
+task runClient2(type: JavaExec) {
+    dependsOn arguments
+    classpath = sourceSets.main.runtimeClasspath
+    description = "Run Client2"
+    main = 'example.grpcclient.Client2'
+    standardInput = System.in
+    // default args
+    args serviceHost 
+    args servicePort
+    args registryHost
+    args grpcPort
+    args message 
+    args 'true' // This sets the regOn flag to true
+}
+
 
 // How I ran it:
 // ser321test.duckdns.org is my IP on the first AWS instance

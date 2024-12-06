@@ -1,2 +1,6 @@
 Nov 08, 2023 5:17:07 PM registry.Logging logging
 INFO: New service registered: test localhost:8000
+Dec 05, 2024 8:32:32 PM registry.Logging logging
+INFO: New service registered: Node1 localhost:8000
+Dec 05, 2024 8:47:11 PM registry.Logging logging
+INFO: New service registered: Node1 localhost:8000

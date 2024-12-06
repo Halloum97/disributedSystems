@@ -1,61 +1,57 @@
-# GRPC Services and Registry
+### GRPC Services and Registry
 
-The following folder contains a Registry.jar which includes a Registering service where Nodes can register to allow clients to find them and use their implemented GRPC services. 
+#### Description
+This project demonstrates a network of nodes using gRPC services and a registry for service discovery. The project includes clients and nodes that register themselves with a central registry, allowing clients to discover and interact with available services dynamically. The project fulfills the following requirements:
+- Registers nodes with a central registry.
+- Allows clients to discover and interact with registered services.
+- Provides robust error handling to ensure the client does not crash easily.
 
-Some more detailed explanations will follow and please also check the build.gradle file
+#### Running the Program
+To run the program, follow these steps:
 
-## Run things locally without registry
-To run see also video. To run locally and without Registry which you should do for the beginning
+1. **Run the Registry Server:**
+ 
+   gradle runRegistryServer
 
-First Terminal
 
-    gradle runNode
+2. **Run a Node with Services:**
 
-Second Terminal
+   gradle runNode
+ 
 
-    gradle runClient
+3. **Run the Client:**
 
-## Run things locally with registry
+   gradle runClient2 
 
-First terminal
 
-    gradle runRegistryServer
+#### Working with the Program
+1. **Client Interaction:**
+   - The client will fetch available services from the registry.
+   - It will display the list of available services.
+   - The user can select a service by entering the corresponding number.
+   - The client will then interact with the selected service, prompting the user for any necessary input.
 
-Second terminal
+2. **Expected Inputs:**
+   - When prompted to select a service, enter the number corresponding to the desired service.
+   - For services like "Echo," you will be prompted to enter a message.
 
-    gradle runNode -PregOn=true 
+#### Requirements Fulfilled
+- **Task 3.1: Register things locally**
+  - Created `Client2.java` to connect to the registry and fetch available services.
+  - Ensured the client can choose between all registered services.
+  - Implemented robust error handling to prevent crashes.
 
-Third Terminal
+- **Task 3.2: Putting your node online**
+  - Provided commands to run the node and client with the necessary parameters.
 
-    gradle runClient -PregOn=true
+#### Screencast
+[Watch the screencast](https://somup.com/cZl1VLJRXf) (NOTE: PLEASE TURN OFF THE VOLUME) to see the program in action and understand what has been accomplished.
 
-### gradle runRegistryServer
-Will run the Registry node on localhost (arguments are possible see gradle). This node will run and allows nodes to register themselves. 
+#### Running Tests
+To run the automated tests, use the following command:
+```sh
+gradle runClientAuto -Phost=localhost -Pport=8000 -PregHost=localhost -PregPort=9002 -Pmessage="Hello" -PregOn=false
+```
 
-The Server allows Protobuf, JSON and gRPC. We will only be using gRPC
-
-### gradle runNode
-Will run a node with an Echo and Joke service. The node registers itself on the Registry. You can change the host and port the node runs on and this will register accordingly with the Registry
-
-### gradle runClient
-Will run a client which will call the services from the node, it talks to the node directly not through the registry. At the end the client does some calls to the Registry to pull the services, this will be needed later.
-
-### gradle runDiscovery
-Will create a couple of threads with each running a node with services in JSON and Protobuf. This is just an example and not needed for assignment 6. 
-
-### gradle testProtobufRegistration
-Registers the protobuf nodes from runDiscovery and do some calls. 
-
-### gradle testJSONRegistration
-Registers the json nodes from runDiscovery and do some calls. 
-
-### gradle test
-Runs the test cases for Joke and Echo. It expects a new start of the server before running the tests!
-First run
-    gradle runNode
-then in second terminal
-    gradle test
-
-To run in IDE:
-- go about it like in the ProtoBuf assignment to get rid of errors
-- all mains expect input, so if you want to run them in your IDE you need to provide the inputs for them, see build.gradle
+#### Explanation of `library.proto`
+The `library.proto` file defines the protocol buffer schema for the Library service. It includes messages and service definitions for adding books, listing books, and other library-related operations. This schema is used to generate the gRPC code for the Library service, enabling clients and servers to communicate using the defined messages and methods.
